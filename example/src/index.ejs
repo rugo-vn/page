@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Simple EJS page</title>
+    <%- await include('./parts/header.ejs') %>
+  </head>
+  <body class="p-4">
+    <% for (let i = 0; i < 10; i++) { %>
+    <div class="text-xs tracking-widest font-mono bg-amber-300 inline">
+      Hello <%= i %>
+    </div>
+    <br />
+    <% } %><%- await include('./parts/footer.ejs') %>
+  </body>
+</html>

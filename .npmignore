@@ -1,0 +1,17 @@
+# Tmp
+.cache
+.tmp
+
+# Dependencies
+node_modules
+package-lock.json
+
+# Test
+coverage
+
+# Build
+build
+
+# Source
+src
+example

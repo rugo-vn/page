@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Simple EJS page</title>
+    <%- include('./parts/header.ejs') %>
+  </head>
+  <body>
+    <% for (const i = 0; i < 10; i++) { %>
+    <div>Hello <%= i %></div>
+    <% } %><%- include('./parts/footer.ejs') %>
+  </body>
+</html>
