@@ -38,6 +38,7 @@
     "postcss-loader": "^7.1.0",
     "rimraf": "^4.4.1",
     "style-loader": "^3.3.2",
+    "terser-webpack-plugin": "^5.3.7",
     "webpack": "^5.77.0"
   },
   "devDependencies": {

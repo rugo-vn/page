@@ -6,7 +6,7 @@ import webpack from 'webpack';
 import rimraf from 'rimraf';
 import http from 'http';
 import WebSocket from 'faye-websocket';
-import { dirname, join, relative } from 'path';
+import { dirname, join, relative, resolve } from 'path';
 import { createBroker } from '@rugo-vn/service';
 import { mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -14,6 +14,8 @@ import { fileURLToPath } from 'url';
 import MiniCssExtractPlugin from 'mini-css-extract-plugin';
 import CopyPlugin from 'copy-webpack-plugin';
 import HtmlWebpackPlugin from 'html-webpack-plugin';
+import CssMinimizerPlugin from 'css-minimizer-webpack-plugin';
+import TerserPlugin from 'terser-webpack-plugin';
 
 import * as FxService from '@rugo-vn/fx';
 import * as ServerService from '@rugo-vn/server';
@@ -21,7 +23,9 @@ import * as StorageService from '@rugo-vn/storage';
 import * as BuildService from './build.js';
 
 const WAIT = 100;
-const isBuild = false;
+const isBuild = process.argv
+  .map((i) => i.trim().toLowerCase())
+  .some((i) => i === '--build');
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 (async () => {
@@ -44,8 +48,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
   rimraf.sync(runRoot);
 
   mkdirSync(runRoot, { recursive: true });
-  // mkdirSync(staticDir, { recursive: true });
-  // mkdirSync(viewDir, { recursive: true });
+  mkdirSync(staticDir, { recursive: true });
+  mkdirSync(viewDir, { recursive: true });
 
   const settings = {
     storage,
@@ -106,22 +110,24 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
   // broker
   const broker = createBroker(settings);
 
-  await broker.createService(FxService);
-  await broker.createService(StorageService);
-  await broker.createService(BuildService);
-  await broker.createService(ServerService);
+  if (!isBuild) {
+    await broker.createService(FxService);
+    await broker.createService(StorageService);
+    await broker.createService(BuildService);
+    await broker.createService(ServerService);
 
-  await broker.start();
-  await broker.call('storage.setConfig', {
-    spaceId,
-    driveName: staticDrive,
-    config: true,
-  });
-  await broker.call('storage.setConfig', {
-    spaceId,
-    driveName: viewDrive,
-    config: true,
-  });
+    await broker.start();
+    await broker.call('storage.setConfig', {
+      spaceId,
+      driveName: staticDrive,
+      config: true,
+    });
+    await broker.call('storage.setConfig', {
+      spaceId,
+      driveName: viewDrive,
+      config: true,
+    });
+  }
 
   // web socket
   const server = http.createServer();
@@ -154,20 +160,23 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
     clients.push(ws);
   });
-  server.listen(3001);
+
+  if (!isBuild) server.listen(3001);
 
   // webpack
   let content = '';
   for (const css of workConfig.css || [])
     content += `import "${relative(runRoot, join(srcDir, css))}";\n`;
 
-  content += readFileSync(join(__dirname, 'inject.js')).toString() + '\n';
+  // life reload
+  if (!isBuild)
+    content += readFileSync(join(__dirname, 'inject.js')).toString() + '\n';
 
   writeFileSync(entryPath, content);
 
   const { plugins, options } = await postcssrc();
 
-  webpack({
+  const processor = webpack({
     entry: [entryPath],
     output: {
       filename: isBuild ? '[name].[contenthash].js' : '[name].js',
@@ -178,8 +187,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
         {
           test: /\.css$/i,
           use: [
-            'style-loader',
-            // MiniCssExtractPlugin.loader,
+            ...(isBuild ? [MiniCssExtractPlugin.loader] : ['style-loader']),
             'css-loader',
             {
               loader: 'postcss-loader',
@@ -222,22 +230,31 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
     ],
     optimization: {
       minimizer: [
-        /* new CssMinimizerPlugin() */
+        ...(isBuild ? [new CssMinimizerPlugin(), new TerserPlugin()] : []),
       ],
     },
-  }).watch(
-    {
-      // Example
-      aggregateTimeout: 300,
-      poll: undefined,
-    },
-    (err, stats) => {
-      if (err) return console.error(err);
+  });
 
-      console.log(' - Compile success. Reload.');
-      for (let ws of clients) {
-        if (ws) ws.send('reload');
+  if (isBuild) {
+    await new Promise((resolve, reject) =>
+      processor.run((err, stats) => (err ? reject(err) : resolve(stats)))
+    );
+    console.log(' - Done.');
+  } else {
+    processor.watch(
+      {
+        // Example
+        aggregateTimeout: 300,
+        poll: undefined,
+      },
+      (err, stats) => {
+        if (err) return console.error(err);
+
+        console.log(' - Compile success. Reload.');
+        for (let ws of clients) {
+          if (ws) ws.send('reload');
+        }
       }
-    }
-  );
+    );
+  }
 })();
