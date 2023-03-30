@@ -6,8 +6,8 @@ import webpack from 'webpack';
 import rimraf from 'rimraf';
 import http from 'http';
 import WebSocket from 'faye-websocket';
-import { dirname, join, relative, resolve } from 'path';
-import { createBroker } from '@rugo-vn/service';
+import { dirname, join, parse, relative, resolve } from 'path';
+import { createBroker, exec } from '@rugo-vn/service';
 import { mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 
@@ -165,8 +165,40 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
   // webpack
   let content = '';
-  for (const css of workConfig.css || [])
-    content += `import "${relative(runRoot, join(srcDir, css))}";\n`;
+  const importAssets = [];
+  const jsAssets = [];
+  const otherAssets = workConfig.statics || [];
+
+  for (const asset of workConfig.assets || []) {
+    const pp = parse(asset);
+
+    if (pp.ext === '.js') {
+      jsAssets.push(asset);
+      continue;
+    }
+
+    if (
+      ['.css', '.png', '.jpg', '.svg', '.jpeg', '.gif'].indexOf(pp.ext) !== -1
+    ) {
+      importAssets.push(asset);
+      continue;
+    }
+
+    otherAssets.push(asset);
+  }
+
+  for (const asset of importAssets) {
+    // const pp = parse(asset);
+    const assetFullPath = join(srcDir, asset);
+    const relatedAsset = relative(runRoot, assetFullPath);
+
+    // if (pp.ext === '.js') {
+    //   content += `import * from "${relatedAsset}";\n`;
+    //   continue;
+    // }
+
+    content += `import "${relatedAsset}";\n`;
+  }
 
   // life reload
   if (!isBuild)
@@ -177,7 +209,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
   const { plugins, options } = await postcssrc();
 
   const processor = webpack({
-    entry: [entryPath],
+    entry: [entryPath, ...jsAssets.map((i) => join(srcDir, i))],
     output: {
       filename: isBuild ? '[name].[contenthash].js' : '[name].js',
       path: staticDir,
@@ -200,18 +232,44 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
             },
           ],
         },
+        {
+          test: /\.(png|svg|jpg|jpeg|gif)$/i,
+          type: 'asset/resource',
+          generator: {
+            filename: isBuild
+              ? 'images/[name].[hash][ext][query]'
+              : 'images/[name][ext][query]',
+          },
+        },
+        {
+          test: /\.(woff|woff2|eot|ttf|otf)$/i,
+          type: 'asset/resource',
+          generator: {
+            filename: isBuild
+              ? 'fonts/[name].[hash][ext][query]'
+              : 'fonts/[name][ext][query]',
+          },
+        },
+        {
+          test: /\.html$/i,
+          loader: 'html-loader',
+        },
       ],
     },
     plugins: [
-      ...(workConfig.templates || []).map(
-        (templatePath) =>
-          new HtmlWebpackPlugin({
-            inject: false,
-            template: join(srcDir, templatePath),
-            filename: relative(staticDir, join(viewDir, templatePath)),
-            publicPath: '/',
-          })
-      ),
+      ...(workConfig.templates || []).map((templatePath) => {
+        const pp = parse(templatePath);
+        const isHTML = pp.ext === '.html';
+
+        return new HtmlWebpackPlugin({
+          inject: isHTML,
+          template: join(srcDir, templatePath),
+          filename: isHTML
+            ? templatePath
+            : relative(staticDir, join(viewDir, templatePath)),
+          publicPath: '/',
+        });
+      }),
       new CopyPlugin({
         patterns: [
           {
@@ -221,6 +279,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
             },
             toType: 'file',
           },
+          ...otherAssets.map((asset) => ({
+            from: join(srcDir, asset),
+            to: join(staticDir, asset),
+          })),
         ],
       }),
       new MiniCssExtractPlugin({
@@ -239,6 +301,21 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
     await new Promise((resolve, reject) =>
       processor.run((err, stats) => (err ? reject(err) : resolve(stats)))
     );
+
+    await exec(`cd "${staticDir}" && zip -r ../statics.zip *`);
+    await exec(`cd "${viewDir}" && zip -r ../views.zip *`);
+
+    const distDir = join(workRoot, 'dist');
+    rimraf.sync(distDir);
+    mkdirSync(distDir, { recursive: true });
+
+    await exec(
+      `cd "${distDir}" && mv "${join(runRoot, 'statics.zip')}" . && mv "${join(
+        runRoot,
+        'views.zip'
+      )}" .`
+    );
+
     console.log(' - Done.');
   } else {
     processor.watch(
@@ -251,6 +328,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
         if (err) return console.error(err);
 
         console.log(' - Compile success. Reload.');
+
         for (let ws of clients) {
           if (ws) ws.send('reload');
         }

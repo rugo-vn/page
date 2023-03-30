@@ -1,7 +1,8 @@
 export default {
   sourceDir: './src',
-  css: ['./assets/style.css'],
-  templates: ['./parts/header.ejs', './parts/footer.ejs'],
+  assets: ['./assets/style.css', './assets/main.js', './images'],
+  statics: ['./favicon.ico'],
+  templates: ['./parts/header.ejs', './parts/footer.ejs', 'about.html'],
   routes: [
     {
       method: 'get',

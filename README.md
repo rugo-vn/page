@@ -29,11 +29,27 @@ Build:
 npm run build
 ```
 
-## 3rd libraries
+## Configuration
 
-**TailwindCSS**
+**`rugopa.config.js`**
 
-Install TailwindCSS using PostCSS.
+```js
+{
+  sourceDir: /* source directory to store all working files */,
+  assets: [/* path to asset need to render */],
+  statics: [/* path to asset need to copy as static */],
+  templates: [/* path to template need to render, allowed .ejs, .html */],
+  routes: [
+    {
+      method: /* http method */,
+      path: /* path to lookup */,
+      view: /* view to render, lookup from .rugopa/views */,
+    }
+  ]
+}
+```
+
+All `.ejs` file in the root of `sourceDir` will be copied into views.
 
 ## License
 

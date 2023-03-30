@@ -1,6 +1,6 @@
 {
   "name": "@rugo-vn/page",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "",
   "bin": {
     "rugopa": "src/index.js"
@@ -33,6 +33,7 @@
     "css-loader": "^6.7.3",
     "css-minimizer-webpack-plugin": "^5.0.0",
     "faye-websocket": "^0.11.4",
+    "html-loader": "^4.2.0",
     "html-webpack-plugin": "^5.5.0",
     "mini-css-extract-plugin": "^2.7.5",
     "postcss": "^8.4.21",
