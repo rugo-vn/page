@@ -9,7 +9,9 @@
   "module": "src/index.js",
   "type": "module",
   "scripts": {
-    "test": "node --test ./test/index.test.js"
+    "test": "node --test ./test/index.test.js",
+    "publish:beta": "npm publish --access public --tag beta",
+    "publish:release": "npm publish --access public"
   },
   "repository": {
     "type": "git",
