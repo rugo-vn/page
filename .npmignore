@@ -8,10 +8,10 @@ package-lock.json
 
 # Test
 coverage
+test
 
 # Build
 build
 
 # Source
-src
 example
