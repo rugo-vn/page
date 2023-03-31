@@ -8,7 +8,7 @@ import http from 'http';
 import WebSocket from 'faye-websocket';
 import { dirname, join, parse, relative, resolve } from 'path';
 import { createBroker, exec } from '@rugo-vn/service';
-import { mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 
 import MiniCssExtractPlugin from 'mini-css-extract-plugin';
@@ -21,6 +21,7 @@ import * as FxService from '@rugo-vn/fx';
 import * as ServerService from '@rugo-vn/server';
 import * as StorageService from '@rugo-vn/storage';
 import * as BuildService from './build.js';
+import * as MockDbService from './mocks/db.js';
 
 const WAIT = 100;
 const isBuild = process.argv
@@ -65,6 +66,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
         },
       },
     },
+    mocks: workConfig.mocks || {},
   };
 
   for (const route of workConfig?.routes || []) {
@@ -114,6 +116,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
     await broker.createService(FxService);
     await broker.createService(StorageService);
     await broker.createService(BuildService);
+    await broker.createService(MockDbService);
     await broker.createService(ServerService);
 
     await broker.start();
@@ -200,6 +203,25 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
     content += `import "${relatedAsset}";\n`;
   }
 
+  // copy patterns
+  const patterns = [
+    ...(readdirSync(srcDir).some((i) => parse(i).ext === '.ejs')
+      ? [
+          {
+            from: join(srcDir, '*.ejs'),
+            to({ absoluteFilename }) {
+              return join(viewDir, relative(srcDir, absoluteFilename));
+            },
+            toType: 'file',
+          },
+        ]
+      : []),
+    ...otherAssets.map((asset) => ({
+      from: join(srcDir, asset),
+      to: join(staticDir, asset),
+    })),
+  ];
+
   // life reload
   if (!isBuild)
     content += readFileSync(join(__dirname, 'inject.js')).toString() + '\n';
@@ -260,7 +282,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
       ...(workConfig.templates || []).map((templatePath) => {
         const pp = parse(templatePath);
         const isHTML = pp.ext === '.html';
-
         return new HtmlWebpackPlugin({
           inject: isHTML,
           template: join(srcDir, templatePath),
@@ -270,21 +291,13 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
           publicPath: '/',
         });
       }),
-      new CopyPlugin({
-        patterns: [
-          {
-            from: join(srcDir, '*.ejs'),
-            to({ absoluteFilename }) {
-              return join(viewDir, relative(srcDir, absoluteFilename));
-            },
-            toType: 'file',
-          },
-          ...otherAssets.map((asset) => ({
-            from: join(srcDir, asset),
-            to: join(staticDir, asset),
-          })),
-        ],
-      }),
+      ...(patterns.length
+        ? [
+            new CopyPlugin({
+              patterns: patterns,
+            }),
+          ]
+        : []),
       new MiniCssExtractPlugin({
         filename: isBuild ? '[name].[contenthash].css' : '[name].css',
         chunkFilename: isBuild ? '[id].[contenthash].css' : '[id].css',

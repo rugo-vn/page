@@ -24,6 +24,8 @@
     <% for (let i = 0; i < 10; i++) { %>
     <div class="text-xs tracking-widest inline">Hello <%= i %></div>
     <br />
-    <% } %><%- await include('./parts/footer.ejs') %>
+    <% } %> <%= JSON.stringify(await table('posts').find({})) %> <%=
+    JSON.stringify(await table('posts').get({ id: 1})) %> <%- await
+    include('./parts/footer.ejs') %>
   </body>
 </html>

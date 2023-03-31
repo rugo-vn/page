@@ -10,4 +10,7 @@ export default {
       view: 'index.ejs',
     },
   ],
+  mocks: {
+    db: [{ name: 'Foo', desc: 'Bar' }],
+  },
 };
