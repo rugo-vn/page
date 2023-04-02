@@ -28,6 +28,7 @@
     JSON.stringify(await table('posts').get({ id: 1})) %>
     <div>Now is: <%= moment().format('YYYY/MM/DD HH:mm:ss') %></div>
     <div><%= (await http.get('http://example.com')).data %></div>
+    <div><%= params.name %></div>
     <%- await include('./parts/footer.ejs') %>
   </body>
 </html>

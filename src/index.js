@@ -88,6 +88,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
             driveName: viewDrive,
             entry: route.view,
             locals: modules,
+            'locals.params': '_.params',
+            'locals.query': '_.query',
+            'locals.headers': '_.headers',
+            'locals.method': '_.method',
           },
           output: {
             raw: '_',

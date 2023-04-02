@@ -9,6 +9,11 @@ export default {
       path: '/',
       view: 'index.ejs',
     },
+    {
+      method: 'get',
+      path: '/sample/:name.html',
+      view: 'index.ejs',
+    },
   ],
   mocks: {
     db: [{ name: 'Foo', desc: 'Bar' }],
