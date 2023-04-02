@@ -311,13 +311,20 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
           ]
         : []),
       new MiniCssExtractPlugin({
-        filename: isBuild ? '[name].[contenthash].css' : '[name].css',
-        chunkFilename: isBuild ? '[id].[contenthash].css' : '[id].css',
+        filename: isBuild ? '[name].[contenthash].min.css' : '[name].css',
+        chunkFilename: isBuild ? '[id].[contenthash].min.css' : '[id].css',
       }),
     ],
     optimization: {
       minimizer: [
-        ...(isBuild ? [new CssMinimizerPlugin(), new TerserPlugin()] : []),
+        ...(isBuild
+          ? [
+              new CssMinimizerPlugin({
+                test: /\.min\.css/i,
+              }),
+              new TerserPlugin(),
+            ]
+          : []),
       ],
     },
   });
