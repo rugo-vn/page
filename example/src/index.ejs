@@ -25,7 +25,8 @@
     <div class="text-xs tracking-widest inline">Hello <%= i %></div>
     <br />
     <% } %> <%= JSON.stringify(await table('posts').find({})) %> <%=
-    JSON.stringify(await table('posts').get({ id: 1})) %> <%- await
-    include('./parts/footer.ejs') %>
+    JSON.stringify(await table('posts').get({ id: 1})) %>
+    <div>Now is: <%= moment().format('YYYY/MM/DD HH:mm:ss') %></div>
+    <%- await include('./parts/footer.ejs') %>
   </body>
 </html>

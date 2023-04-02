@@ -1,6 +1,6 @@
 {
   "name": "@rugo-vn/page",
-  "version": "1.0.2",
+  "version": "1.0.4",
   "description": "",
   "bin": {
     "rugopa": "src/index.js"
@@ -25,7 +25,7 @@
   },
   "homepage": "https://github.com/rugo-vn/page#readme",
   "dependencies": {
-    "@rugo-vn/fx": "^1.0.2",
+    "@rugo-vn/fx": "^1.0.3",
     "@rugo-vn/server": "^2.0.2",
     "@rugo-vn/service": "^2.0.2",
     "@rugo-vn/storage": "^1.0.2",
