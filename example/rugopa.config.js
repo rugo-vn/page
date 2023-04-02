@@ -13,4 +13,7 @@ export default {
   mocks: {
     db: [{ name: 'Foo', desc: 'Bar' }],
   },
+  modules: {
+    http: 'node_modules/axios/index.js',
+  },
 };

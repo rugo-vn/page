@@ -69,6 +69,13 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
     mocks: workConfig.mocks || {},
   };
 
+  const modules = {};
+  for (const name in workConfig.modules || {}) {
+    modules[name] = (
+      await import(join(workRoot, workConfig.modules[name]))
+    ).default;
+  }
+
   for (const route of workConfig?.routes || []) {
     settings.server.routes.push({
       method: route.method || 'get',
@@ -80,6 +87,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
             spaceId,
             driveName: viewDrive,
             entry: route.view,
+            locals: modules,
           },
           output: {
             raw: '_',
