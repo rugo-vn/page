@@ -1,6 +1,6 @@
 {
   "name": "@rugo-vn/page",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "",
   "bin": {
     "rugopa": "src/index.js"

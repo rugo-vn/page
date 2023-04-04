@@ -245,6 +245,7 @@ async function createServer() {
   if (htmlStatics.length) {
     const viteConfig = {
       root: srcDir,
+      publicDir: join(workRoot, 'public'),
       build: {
         outDir: staticDir,
         emptyOutDir: true,
