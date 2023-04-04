@@ -1,21 +1,23 @@
 #!/usr/bin/env node
 
 import process from 'process';
-import postcssrc from 'postcss-load-config';
-import webpack from 'webpack';
 import rimraf from 'rimraf';
 import http from 'http';
 import WebSocket from 'faye-websocket';
+import { createServer as createViteServer, build as buildVite } from 'vite';
 import { dirname, join, parse, relative, resolve } from 'path';
 import { createBroker, exec } from '@rugo-vn/service';
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'fs';
+import {
+  copyFileSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  writeFileSync,
+} from 'fs';
+import { flatten, mergeDeepLeft } from 'ramda';
 import { fileURLToPath } from 'url';
-
-import MiniCssExtractPlugin from 'mini-css-extract-plugin';
-import CopyPlugin from 'copy-webpack-plugin';
-import HtmlWebpackPlugin from 'html-webpack-plugin';
-import CssMinimizerPlugin from 'css-minimizer-webpack-plugin';
-import TerserPlugin from 'terser-webpack-plugin';
 
 import * as FxService from '@rugo-vn/fx';
 import * as ServerService from '@rugo-vn/server';
@@ -29,10 +31,25 @@ const isBuild = process.argv
   .some((i) => i === '--build');
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-(async () => {
+function scanDir(dir) {
+  const ls = readdirSync(dir);
+  return flatten(
+    ls.map((name) => {
+      const entry = join(dir, name);
+
+      if (statSync(entry).isDirectory())
+        return scanDir(entry).map((childName) => join(name, childName));
+
+      return name;
+    })
+  );
+}
+
+async function createServer() {
   // config
   const workRoot = process.cwd();
-  const workConfig = (await import(join(workRoot, 'rugopa.config.js'))).default;
+  const workConfig =
+    (await import(join(workRoot, 'rugopa.config.js'))).default || {};
 
   const spaceId = '.rugopa';
   const staticDrive = 'statics';
@@ -76,7 +93,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
     ).default;
   }
 
-  for (const route of workConfig?.routes || []) {
+  for (const route of workConfig.routes || []) {
     settings.server.routes.push({
       method: route.method || 'get',
       path: route.path,
@@ -178,193 +195,99 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
   if (!isBuild) server.listen(3001);
 
-  // webpack
-  let content = '';
-  const importAssets = [];
-  const jsAssets = [];
-  const otherAssets = workConfig.statics || [];
+  // vite
+  const ls = scanDir(srcDir);
+  const htmlStatics = ls.filter((p) => parse(p).ext === '.html');
+  const inputBuilds = {};
+  for (const name of htmlStatics) inputBuilds[name] = join(srcDir, name);
 
-  for (const asset of workConfig.assets || []) {
-    const pp = parse(asset);
+  const injectContent =
+    readFileSync(join(__dirname, 'inject.js')).toString() + '\n';
 
-    if (pp.ext === '.js') {
-      jsAssets.push(asset);
-      continue;
-    }
+  function viewPlugin() {
+    return {
+      name: 'view',
+      writeBundle() {
+        rimraf.sync(viewDir);
 
-    if (
-      ['.css', '.png', '.jpg', '.svg', '.jpeg', '.gif'].indexOf(pp.ext) !== -1
-    ) {
-      importAssets.push(asset);
-      continue;
-    }
+        const ejsViews = ls.filter((p) => parse(p).ext === '.ejs');
+        for (const name of ejsViews) {
+          const entry = join(viewDir, name);
+          mkdirSync(dirname(entry), { recursive: true });
+          copyFileSync(join(srcDir, name), entry);
+        }
 
-    otherAssets.push(asset);
-  }
+        const htmlEjsViews = ls.filter((p) => /\.ejs\.html$/i.test(p));
+        for (const name of htmlEjsViews) {
+          const entry = join(viewDir, name);
+          mkdirSync(dirname(entry), { recursive: true });
+          renameSync(
+            join(staticDir, name),
+            join(dirname(entry), parse(entry).name)
+          );
+        }
 
-  for (const asset of importAssets) {
-    // const pp = parse(asset);
-    const assetFullPath = join(srcDir, asset);
-    const relatedAsset = relative(runRoot, assetFullPath);
-
-    // if (pp.ext === '.js') {
-    //   content += `import * from "${relatedAsset}";\n`;
-    //   continue;
-    // }
-
-    content += `import "${relatedAsset}";\n`;
-  }
-
-  // copy patterns
-  const patterns = [
-    ...(readdirSync(srcDir).some((i) => parse(i).ext === '.ejs')
-      ? [
-          {
-            from: join(srcDir, '*.ejs'),
-            to({ absoluteFilename }) {
-              return join(viewDir, relative(srcDir, absoluteFilename));
-            },
-            toType: 'file',
-          },
-        ]
-      : []),
-    ...otherAssets.map((asset) => ({
-      from: join(srcDir, asset),
-      to: join(staticDir, asset),
-    })),
-  ];
-
-  // life reload
-  if (!isBuild)
-    content += readFileSync(join(__dirname, 'inject.js')).toString() + '\n';
-
-  writeFileSync(entryPath, content);
-
-  const { plugins, options } = await postcssrc();
-
-  const processor = webpack({
-    entry: [entryPath, ...jsAssets.map((i) => join(srcDir, i))],
-    output: {
-      filename: isBuild ? '[name].[contenthash].js' : '[name].js',
-      path: staticDir,
-    },
-    module: {
-      rules: [
-        {
-          test: /\.css$/i,
-          use: [
-            ...(isBuild ? [MiniCssExtractPlugin.loader] : ['style-loader']),
-            'css-loader',
-            {
-              loader: 'postcss-loader',
-              options: {
-                postcssOptions: {
-                  plugins,
-                  options,
-                },
-              },
-            },
-          ],
-        },
-        {
-          test: /\.(png|svg|jpg|jpeg|gif)$/i,
-          type: 'asset/resource',
-          generator: {
-            filename: isBuild
-              ? 'images/[name].[hash][ext][query]'
-              : 'images/[name][ext][query]',
-          },
-        },
-        {
-          test: /\.(woff|woff2|eot|ttf|otf)$/i,
-          type: 'asset/resource',
-          generator: {
-            filename: isBuild
-              ? 'fonts/[name].[hash][ext][query]'
-              : 'fonts/[name][ext][query]',
-          },
-        },
-        {
-          test: /\.html$/i,
-          loader: 'html-loader',
-        },
-      ],
-    },
-    plugins: [
-      ...(workConfig.templates || []).map((templatePath) => {
-        const pp = parse(templatePath);
-        const isHTML = pp.ext === '.html';
-        return new HtmlWebpackPlugin({
-          inject: isHTML,
-          template: join(srcDir, templatePath),
-          filename: isHTML
-            ? templatePath
-            : relative(staticDir, join(viewDir, templatePath)),
-          publicPath: '/',
-        });
-      }),
-      ...(patterns.length
-        ? [
-            new CopyPlugin({
-              patterns: patterns,
-            }),
-          ]
-        : []),
-      new MiniCssExtractPlugin({
-        filename: isBuild ? '[name].[contenthash].min.css' : '[name].css',
-        chunkFilename: isBuild ? '[id].[contenthash].min.css' : '[id].css',
-      }),
-    ],
-    optimization: {
-      minimizer: [
-        ...(isBuild
-          ? [
-              new CssMinimizerPlugin({
-                test: /\.min\.css/i,
-              }),
-              new TerserPlugin(),
-            ]
-          : []),
-      ],
-    },
-  });
-
-  if (isBuild) {
-    await new Promise((resolve, reject) =>
-      processor.run((err, stats) => (err ? reject(err) : resolve(stats)))
-    );
-
-    await exec(`cd "${staticDir}" && zip -r ../statics.zip *`);
-    await exec(`cd "${viewDir}" && zip -r ../views.zip *`);
-
-    const distDir = join(workRoot, 'dist');
-    rimraf.sync(distDir);
-    mkdirSync(distDir, { recursive: true });
-
-    await exec(
-      `cd "${distDir}" && mv "${join(runRoot, 'statics.zip')}" . && mv "${join(
-        runRoot,
-        'views.zip'
-      )}" .`
-    );
-
-    console.log(' - Done.');
-  } else {
-    processor.watch(
-      {
-        // Example
-        aggregateTimeout: 300,
-        poll: undefined,
-      },
-      (err, stats) => {
-        if (err) return console.error(err);
-
-        console.log(' - Compile success. Reload.');
+        console.log('  templates are copied!');
 
         for (let ws of clients) {
           if (ws) ws.send('reload');
         }
-      }
-    );
+      },
+
+      async banner() {
+        if (isBuild) return;
+
+        return injectContent;
+      },
+    };
   }
-})();
+
+  if (htmlStatics.length) {
+    const viteConfig = {
+      root: srcDir,
+      build: {
+        outDir: staticDir,
+        emptyOutDir: true,
+        rollupOptions: {
+          input: inputBuilds,
+          plugins: [viewPlugin()],
+        },
+      },
+    };
+
+    if (isBuild) {
+      await buildVite(viteConfig);
+
+      await exec(`cd "${staticDir}" && zip -r ../statics.zip *`);
+      await exec(`cd "${viewDir}" && zip -r ../views.zip *`);
+
+      const distDir = join(workRoot, 'dist');
+      rimraf.sync(distDir);
+      mkdirSync(distDir, { recursive: true });
+
+      await exec(
+        `cd "${distDir}" && mv "${join(
+          runRoot,
+          'statics.zip'
+        )}" . && mv "${join(runRoot, 'views.zip')}" .`
+      );
+
+      console.log(' - Done.');
+    } else {
+      await buildVite(
+        mergeDeepLeft(
+          {
+            build: {
+              watch: {
+                buildDelay: 100,
+              },
+            },
+          },
+          viteConfig
+        )
+      );
+    }
+  }
+}
+
+createServer();
