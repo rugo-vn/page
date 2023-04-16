@@ -5,23 +5,7 @@
     <%- await include('./parts/header.ejs') %>
   </head>
   <body class="p-4 font-mono">
-    <div class="flex mb-4">
-      <a
-        class="bg-amber-300 tracking-widest cursor-pointer hover:underline mr-2"
-        href="/"
-      >
-        Home
-      </a>
-
-      <a
-        class="bg-amber-300 tracking-widest cursor-pointer hover:underline mr-2"
-        href="/about.html"
-      >
-        About
-      </a>
-    </div>
-
-    <% for (let i = 0; i < 10; i++) { %>
+    <%- await include('./parts/nav.ejs') %> <% for (let i = 0; i < 10; i++) { %>
     <div class="text-xs tracking-widest inline">Hello <%= i %></div>
     <br />
     <% } %> <%= JSON.stringify(await table('posts').find({})) %> <%=
